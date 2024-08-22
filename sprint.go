@@ -3,6 +3,9 @@ package jira
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"strconv"
+	"strings"
 
 	"github.com/google/go-querystring/query"
 )
@@ -59,9 +62,34 @@ func (s *SprintService) MoveIssuesToSprint(sprintID int, issueIDs []string) (*Re
 //
 // Jira API Docs: https://docs.atlassian.com/jira-software/REST/cloud/#agile/1.0/sprint-getIssuesForSprint
 func (s *SprintService) GetIssuesForSprintWithContext(ctx context.Context, sprintID int) ([]Issue, *Response, error) {
-	apiEndpoint := fmt.Sprintf("rest/agile/1.0/sprint/%d/issue", sprintID)
+	return s.getIssuesForSprintWithContext(ctx, sprintID, nil)
+}
 
-	req, err := s.client.NewRequestWithContext(ctx, "GET", apiEndpoint, nil)
+func (s *SprintService) getIssuesForSprintWithContext(ctx context.Context, sprintID int, options *SearchOptions) ([]Issue, *Response, error) {
+	apiEndpoint := fmt.Sprintf("rest/agile/1.0/sprint/%d/issue", sprintID)
+	u := url.URL{
+		Path: apiEndpoint,
+	}
+	uv := url.Values{}
+	if options != nil {
+		if options.StartAt != 0 {
+			uv.Add("startAt", strconv.Itoa(options.StartAt))
+		}
+		if options.MaxResults != 0 {
+			uv.Add("maxResults", strconv.Itoa(options.MaxResults))
+		}
+		if options.Expand != "" {
+			uv.Add("expand", options.Expand)
+		}
+		if strings.Join(options.Fields, ",") != "" {
+			uv.Add("fields", strings.Join(options.Fields, ","))
+		}
+		if options.ValidateQuery != "" {
+			uv.Add("validateQuery", options.ValidateQuery)
+		}
+	}
+	u.RawQuery = uv.Encode()
+	req, err := s.client.NewRequestWithContext(ctx, "GET", u.String(), nil)
 
 	if err != nil {
 		return nil, nil, err
@@ -80,13 +108,16 @@ func (s *SprintService) GetIssuesForSprintWithContext(ctx context.Context, sprin
 func (s *SprintService) GetIssuesForSprint(sprintID int) ([]Issue, *Response, error) {
 	return s.GetIssuesForSprintWithContext(context.Background(), sprintID)
 }
+func (s *SprintService) GetIssuesForSprintWithOptions(sprintID int, options *SearchOptions) ([]Issue, *Response, error) {
+	return s.getIssuesForSprintWithContext(context.Background(), sprintID, options)
+}
 
 // GetIssueWithContext returns a full representation of the issue for the given issue key.
 // Jira will attempt to identify the issue by the issueIdOrKey path parameter.
 // This can be an issue id, or an issue key.
 // If the issue cannot be found via an exact match, Jira will also look for the issue in a case-insensitive way, or by looking to see if the issue was moved.
 //
-// The given options will be appended to the query string
+// # The given options will be appended to the query string
 //
 // Jira API docs: https://docs.atlassian.com/jira-software/REST/7.3.1/#agile/1.0/issue-getIssue
 //
