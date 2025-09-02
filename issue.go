@@ -536,6 +536,23 @@ type searchResult struct {
 	Total      int     `json:"total" structs:"total"`
 }
 
+type SearchJQLOptions struct {
+	// The token for a page to fetch that is not the first page. The first page has a nextPageToken of null. Use the nextPageToken to fetch the next page of issues.
+	NextPageToken string `json:"nextPageToken,omitempty"`
+	// MaxResults: The maximum number of projects to return per page. Default: 50.
+	MaxResults int `json:"maxResults,omitempty"`
+	// Expand: Expand specific sections in the returned issues
+	Expand       string   `json:"expand,omitempty"`
+	Fields       []string `json:"fields,omitempty"`
+	FieldsByKeys bool     `json:"fieldsByKeys,omitempty"`
+}
+
+type SearchJQLResult struct {
+	Issues        []Issue `json:"issues" structs:"issues"`
+	IsLast        bool    `json:"isLast" structs:"isLast"`
+	NextPageToken string  `json:"nextPageToken" structs:"nextPageToken"`
+}
+
 // GetQueryOptions specifies the optional parameters for the Get Issue methods
 type GetQueryOptions struct {
 	// Fields is the list of fields to return for the issue. By default, all fields are returned.
@@ -613,7 +630,7 @@ type RemoteLinkStatus struct {
 // This can be an issue id, or an issue key.
 // If the issue cannot be found via an exact match, Jira will also look for the issue in a case-insensitive way, or by looking to see if the issue was moved.
 //
-// The given options will be appended to the query string
+// # The given options will be appended to the query string
 //
 // Jira API docs: https://docs.atlassian.com/jira/REST/latest/#api/2/issue-getIssue
 func (s *IssueService) GetWithContext(ctx context.Context, issueID string, options *GetQueryOptions) (*Issue, *Response, error) {
@@ -1084,6 +1101,7 @@ func (s *IssueService) AddLink(issueLink *IssueLink) (*Response, error) {
 	return s.AddLinkWithContext(context.Background(), issueLink)
 }
 
+// Deprecated: SearchWithContext is deprecated. Use SearchJQLWithContext instead.
 // SearchWithContext will search for tickets according to the jql
 //
 // Jira API docs: https://developer.atlassian.com/jiradev/jira-apis/jira-rest-apis/jira-rest-api-tutorials/jira-rest-api-example-query-issues
@@ -1129,9 +1147,41 @@ func (s *IssueService) SearchWithContext(ctx context.Context, jql string, option
 	return v.Issues, resp, err
 }
 
+// Deprecated: Search is deprecated. Use SearchJQL instead.
 // Search wraps SearchWithContext using the background context.
 func (s *IssueService) Search(jql string, options *SearchOptions) ([]Issue, *Response, error) {
 	return s.SearchWithContext(context.Background(), jql, options)
+}
+
+// SearchJQL wraps SearchJQLWithContext using the background context.
+func (s *IssueService) SearchJQL(jql string, options *SearchOptions) ([]Issue, *Response, error) {
+	return s.SearchWithContext(context.Background(), jql, options)
+}
+
+// SearchJQLWithContext will search for tickets according to the jql
+// Jira API docs: https://developer.atlassian.com/cloud/jira/platform/rest/v2/api-group-issue-search/#api-rest-api-2-search-jql-get
+func (s *IssueService) SearchJQLWithContext(ctx context.Context, jql string, options *SearchJQLOptions) (*SearchJQLResult, *Response, error) {
+	u := url.URL{
+		Path: "rest/api/2/search/jql",
+	}
+	reqBody := struct {
+		*SearchJQLOptions
+		JQL string `json:"jql"`
+	}{
+		SearchJQLOptions: options,
+		JQL:              jql,
+	}
+	req, err := s.client.NewRequestWithContext(ctx, http.MethodPost, u.String(), &reqBody)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	v := new(SearchJQLResult)
+	resp, err := s.client.Do(req, v)
+	if err != nil {
+		err = NewJiraError(resp, err)
+	}
+	return v, resp, err
 }
 
 // SearchPagesWithContext will get issues from all pages in a search
@@ -1295,15 +1345,17 @@ func (s *IssueService) DoTransitionWithPayload(ticketID, payload interface{}) (*
 }
 
 // InitIssueWithMetaAndFields returns Issue with with values from fieldsConfig properly set.
-//  * metaProject should contain metaInformation about the project where the issue should be created.
-//  * metaIssuetype is the MetaInformation about the Issuetype that needs to be created.
-//  * fieldsConfig is a key->value pair where key represents the name of the field as seen in the UI
-//		And value is the string value for that particular key.
+//   - metaProject should contain metaInformation about the project where the issue should be created.
+//   - metaIssuetype is the MetaInformation about the Issuetype that needs to be created.
+//   - fieldsConfig is a key->value pair where key represents the name of the field as seen in the UI
+//     And value is the string value for that particular key.
+//
 // Note: This method doesn't verify that the fieldsConfig is complete with mandatory fields. The fieldsConfig is
-//		 supposed to be already verified with MetaIssueType.CheckCompleteAndAvailable. It will however return
-//		 error if the key is not found.
-//		 All values will be packed into Unknowns. This is much convenient. If the struct fields needs to be
-//		 configured as well, marshalling and unmarshalling will set the proper fields.
+//
+//	supposed to be already verified with MetaIssueType.CheckCompleteAndAvailable. It will however return
+//	error if the key is not found.
+//	All values will be packed into Unknowns. This is much convenient. If the struct fields needs to be
+//	configured as well, marshalling and unmarshalling will set the proper fields.
 func InitIssueWithMetaAndFields(metaProject *MetaProject, metaIssuetype *MetaIssueType, fieldsConfig map[string]string) (*Issue, error) {
 	issue := new(Issue)
 	issueFields := new(IssueFields)
