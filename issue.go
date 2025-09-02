@@ -1154,8 +1154,8 @@ func (s *IssueService) Search(jql string, options *SearchOptions) ([]Issue, *Res
 }
 
 // SearchJQL wraps SearchJQLWithContext using the background context.
-func (s *IssueService) SearchJQL(jql string, options *SearchOptions) ([]Issue, *Response, error) {
-	return s.SearchWithContext(context.Background(), jql, options)
+func (s *IssueService) SearchJQL(jql string, options *SearchJQLOptions) (*SearchJQLResult, *Response, error) {
+	return s.SearchJQLWithContext(context.Background(), jql, options)
 }
 
 // SearchJQLWithContext will search for tickets according to the jql
