@@ -23,13 +23,16 @@ func (s *IssueLinkTypeService) GetListWithContext(ctx context.Context) ([]IssueL
 	if err != nil {
 		return nil, nil, err
 	}
-
-	linkTypeList := []IssueLinkType{}
-	resp, err := s.client.Do(req, &linkTypeList)
+	result := &struct {
+		IssueLinkTypes []IssueLinkType `json:"issueLinkTypes"`
+	}{
+		IssueLinkTypes: []IssueLinkType{},
+	}
+	resp, err := s.client.Do(req, result)
 	if err != nil {
 		return nil, resp, NewJiraError(resp, err)
 	}
-	return linkTypeList, resp, nil
+	return result.IssueLinkTypes, resp, nil
 }
 
 // GetList wraps GetListWithContext using the background context.
